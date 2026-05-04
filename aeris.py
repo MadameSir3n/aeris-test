@@ -55,12 +55,15 @@ class AerisService:
     """Aeris AI persona — production BentoML service."""
 
     def __init__(self) -> None:
-        from transformers import pipeline
-        self.pipe = pipeline(
-            "text-generation",
-            model=AERIS_MODEL,
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        import torch
+        
+        self.model_id = AERIS_MODEL
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            self.model_id,
+            torch_dtype=torch.float16,
             device_map="auto",
-            max_new_tokens=160,
         )
 
     @bentoml.api()
@@ -69,18 +72,38 @@ class AerisService:
             {"role": "system", "content": AERIS_SYSTEM},
             {"role": "user",   "content": input},
         ]
+        
         try:
-            result = self.pipe(messages)
-            content = result[0]["generated_text"][-1]["content"].strip()
+            # Format for Qwen chat model
+            text = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            inputs = self.tokenizer(text, return_tensors="pt").to(self.model.device)
+            
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=160,
+                    temperature=0.75,
+                    top_p=0.9,
+                    do_sample=True,
+                    repetition_penalty=1.1,
+                )
+            
+            generated = outputs[0][inputs["input_ids"].shape[1]:]
+            content = self.tokenizer.decode(generated, skip_special_tokens=True).strip()
+            
         except Exception as exc:
             content = f"Aeris is resting — {exc}"
 
         return AerisResponse(
             output=content,
-            model=AERIS_MODEL,
+            model=self.model_id,
             emotion=emotion,
         )
 
     @bentoml.api()
     def health(self) -> dict:
-        return {"status": "ok", "model": AERIS_MODEL}
+        return {"status": "ok", "model": self.model_id}
