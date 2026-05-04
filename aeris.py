@@ -55,31 +55,47 @@ class AerisService:
     """Aeris AI persona — production BentoML service."""
 
     def __init__(self) -> None:
-        from transformers import AutoTokenizer, AutoModelForCausalLM
         import torch
+        from transformers import AutoTokenizer, AutoModelForCausalLM
         
         self.model_id = AERIS_MODEL
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_id,
-            torch_dtype=torch.float16,
-            device_map="auto",
-        )
+        
+        try:
+            print(f"Loading tokenizer for {self.model_id}")
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
+            
+            print(f"Loading model for {self.model_id}")
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_id,
+                torch_dtype=torch.float16,
+                device_map="auto",
+                trust_remote_code=True,
+            )
+            print("Model loaded successfully")
+            
+        except Exception as e:
+            print(f"Error loading model: {e}")
+            raise
 
     @bentoml.api()
     def predict(self, input: str, emotion: str = "calm", form: str = "human") -> AerisResponse:
+        import torch
+        
         messages = [
             {"role": "system", "content": AERIS_SYSTEM},
             {"role": "user",   "content": input},
         ]
         
         try:
+            print(f"Processing request: {input}")
+            
             # Format for Qwen chat model
             text = self.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
                 add_generation_prompt=True,
             )
+            
             inputs = self.tokenizer(text, return_tensors="pt").to(self.model.device)
             
             with torch.no_grad():
@@ -95,7 +111,10 @@ class AerisService:
             generated = outputs[0][inputs["input_ids"].shape[1]:]
             content = self.tokenizer.decode(generated, skip_special_tokens=True).strip()
             
+            print(f"Generated response: {content}")
+            
         except Exception as exc:
+            print(f"Error during prediction: {exc}")
             content = f"Aeris is resting — {exc}"
 
         return AerisResponse(
