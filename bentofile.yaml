@@ -1,0 +1,28 @@
+# Aeris Enterprise — BentoML build configuration
+# Build with:  bentoml build
+# Serve with:  bentoml serve aeris:AerisService
+# Push to registry: bentoml push aeris:latest
+
+service: "aeris:AerisService"
+
+labels:
+  owner: MadameSir3n
+  project: MuseRoot
+  model: aeris-v1
+  stage: enterprise-baseline
+
+include:
+  - "aeris.py"
+  - "requirements.txt"
+
+python:
+  requirements_txt: "requirements.txt"
+  lock_packages: false
+
+docker:
+  python_version: "3.11"
+  system_packages:
+    - curl
+  env:
+    - OLLAMA_URL=http://host-gateway:11434/api/chat
+    - OLLAMA_MODEL=aeris:v1
