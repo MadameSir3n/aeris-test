@@ -62,10 +62,10 @@ class AerisService:
         self.ollama_model = OLLAMA_MODEL
 
     @bentoml.api()
-    async def predict(self, request: AerisRequest) -> AerisResponse:
+    async def predict(self, input: str, emotion: str = "calm", form: str = "human") -> AerisResponse:
         messages = [
             {"role": "system",  "content": AERIS_SYSTEM},
-            {"role": "user",    "content": request.input},
+            {"role": "user",    "content": input},
         ]
         payload = {
             "model": self.ollama_model,
